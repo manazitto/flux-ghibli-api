@@ -1,9 +1,6 @@
-fastapi
-uvicorn
 torch
-diffusers
 transformers
+diffusers[torch]
+accelerate
 Pillow
-safetensors
-sentencepiece
-protobuf
+runpod
