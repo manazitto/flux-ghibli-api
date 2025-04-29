@@ -1,89 +1,78 @@
-# 📸 Flux Ghibli Style - FastAPI Serverless API
+# API Serverless Estilo Ghibli com FLUX no Runpod
 
-Uma API serverless baseada em **FastAPI** e **RunPod**, utilizando **Stable Diffusion + LoRA** para transformar imagens reais em **arte estilo Studio Ghibli**, rodando **offline** de forma rápida e otimizada para GPU.
+Este repositório contém o código para uma API serverless no Runpod que aplica um estilo Ghibli (usando um LoRA específico) a uma imagem de entrada usando o modelo FLUX.
 
-## ✨ Funcionalidades
+## Estrutura
 
-- Recebe imagens via upload.
-- Aplica transformação para o estilo Studio Ghibli.
-- Retorna a imagem estilizada diretamente.
-- 100% **offline** (sem necessidade de conexão com HuggingFace ou outros serviços externos).
-- Memória otimizada para VRAM em GPUs.
+- `handler.py`: Lógica principal da API, carregamento do modelo e processamento de requisições.
+- `requirements.txt`: Dependências Python.
+- `Dockerfile`: Define a imagem Docker para o ambiente Runpod.
 
-## 🚀 Como funciona
+## Configuração
 
-A API recebe um arquivo de imagem (`multipart/form-data`), aplica o modelo `flux1-dev` combinado com o LoRA `flux-chatgpt-ghibli-lora`, e retorna a imagem transformada.
+1.  **Modelos e LoRAs:**
+    - Certifique-se de que o modelo base (`flux1-dev`) e o LoRA (`flux-ghibli-lora`) estejam acessíveis dentro do container.
+    - **Opção A (Recomendado para Serverless):** Monte um volume de rede do Runpod contendo os modelos em `./models` e os LoRAs em `./loras` dentro do container.
+    - **Opção B:** Modifique o `Dockerfile` para baixar os modelos/LoRAs durante a construção da imagem (descomente as linhas `RUN huggingface-cli download...`). Isso aumentará o tamanho da imagem.
 
----
+2.  **Imagem Docker:**
+    - Construa a imagem Docker:
+      ```bash
+      docker build -t seu-usuario/runpod-ghibli-api .
+      ```
+    - Envie a imagem para um registro (Docker Hub, ECR, etc.).
 
-## 🛠️ Requisitos
+3.  **Runpod Serverless Endpoint:**
+    - Crie um novo Endpoint Serverless no Runpod.
+    - Configure-o para usar a imagem Docker que você enviou.
+    - Associe o volume de rede (se estiver usando a Opção A para modelos).
+    - Ajuste as configurações de GPU, memória e concorrência conforme necessário.
 
-- Python 3.10
-- PyTorch com suporte CUDA
-- Docker + RunPod (para serverless deployment)
+## Uso
 
----
+Envie uma requisição POST para o URL do seu endpoint Runpod com um JSON no corpo:
 
-## 📄 Estrutura do Projeto
-
-```bash
-.
-├── app_fastapi.py       # Código principal da API
-├── Dockerfile           # Instruções para buildar o container
-├── requirements.txt     # Dependências do projeto
-└── README.md            # Documentação
+```json
+{
+  "input": {
+    "image_base64": "<sua imagem codificada em base64 aqui>",
+    "prompt": "(Opcional) Studio Ghibli painting style, high detail...",
+    "num_inference_steps": 30, 
+    "guidance_scale": 7.5
+  }
+}
 ```
 
----
+**Parâmetros de Entrada:**
 
-## 🧩 Endpoints
+- `image_base64` (Obrigatório): String contendo a imagem de entrada codificada em Base64.
+- `prompt` (Opcional): Sobrescreve o prompt padrão.
+- `num_inference_steps` (Opcional): Número de passos de inferência (padrão: 25).
+- `guidance_scale` (Opcional): Escala de orientação (padrão: 7.0).
 
-### `POST /ghibli`
-- **Input**: Imagem enviada como `multipart/form-data`.
-- **Output**: Arquivo `.png` transformado no estilo Studio Ghibli.
+**Resposta:**
 
-**Exemplo de cURL:**
-```bash
-curl -X POST http://localhost:3000/ghibli \
-  -F "file=@caminho/para/sua/imagem.jpg" \
-  --output resultado.png
+Um JSON contendo a imagem resultante codificada em base64:
+
+```json
+{
+  "image_base64": "<imagem resultante codificada em base64 aqui>"
+}
 ```
 
----
+Ou um erro:
 
-## 🐳 Docker
-
-Para rodar localmente usando Docker:
-
-```bash
-docker build -t flux-ghibli-api .
-docker run -p 3000:3000 flux-ghibli-api
+```json
+{
+  "error": "Mensagem de erro detalhada."
+}
 ```
 
----
+## Otimizações
 
-## ⚡ Deploy no RunPod
+O código inclui várias otimizações para uso de memória CUDA:
 
-1. Suba este repositório no GitHub.
-2. No RunPod, crie um **Serverless Endpoint** usando a opção **GitHub Repo**.
-3. Escolha uma GPU compatível (24GB ou mais).
-4. Configure a porta para `3000`.
-5. Pronto: sua API Ghibli estará online, escalável e pronta para ser usada!
-
----
-
-## 🤖 Créditos
-
-- Base model: [flux1-dev](https://huggingface.co/openfree/flux1-dev)
-- LoRA: [flux-chatgpt-ghibli-lora](https://huggingface.co/openfree/flux-chatgpt-ghibli-lora)
-- Plataforma: [RunPod](https://runpod.io)
-
----
-
-## 🛡️ Licença
-
-Este projeto é distribuído sob a licença **MIT**.
-
----
-
-### 🔥 Let's Ghiblify the World!
+- Configuração `PYTORCH_CUDA_ALLOC_CONF`.
+- Limpeza agressiva de memória (`force_gc`) antes e depois da inferência.
+- Uso de `torch.cuda.amp.autocast` para precisão mista.
+- Carregamento do modelo fora do handler principal.
